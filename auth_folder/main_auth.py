@@ -37,4 +37,4 @@ async def main():
 # запуск
 
 if __name__ == '__main__':
-       asyncio.run(main())
+       asyncio.run("main_auth:app", host="0.0.0.0", port=8001, reload=True)

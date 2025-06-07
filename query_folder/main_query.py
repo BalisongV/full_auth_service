@@ -1,33 +1,42 @@
 from fastapi import FastAPI
 import uvicorn
+import logging
 import sys
 import asyncio
 from query_database import Base, async_engine 
-from query_router import router as query_router 
+from query_router import router
 
-# Создаем экземпляр FastAPI
+import logging
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("app.log"), 
+    ]
+)
+
 app = FastAPI(
-    title="Query Service API",
+    title="Query Service",
     description="Service to interact with PostgreSQL database for user data.",
 )
 
-# Функция для создания таблиц при старте (если их нет)
+
 @app.on_event("startup")
 async def startup_event():
     try:
         async with async_engine.begin() as conn:
-            print("Creating database tables...")
-            # Строку раскоментировать, если нужно удалять таблицы при каждом запуске
+            print("Checking database tables...")
+            # Удаляем таблицы при запуске, чтобы обновить структуру
             # await conn.run_sync(Base.metadata.drop_all)
             await conn.run_sync(Base.metadata.create_all)
-            print("Database tables created.")
+            print("Database tables are ready.")
     except Exception as e:
         print(f"Error during startup: {e}")
         sys.exit(1)
 
-app.include_router(query_router)
+app.include_router(router)
 
-# Точка входа для запуска через uvicorn (если запускать как скрипт)
 async def run_server(app, port):
     config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="info", reload=True)
     server = uvicorn.Server(config)

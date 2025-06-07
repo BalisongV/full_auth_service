@@ -1,100 +1,123 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from starlette.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List
-
-import query_crud as crud
-import query_schemas as schemas
+import query_crud, query_schemas
 from query_database import get_db_session
+from query_models import User
+import bcrypt
+from sqlalchemy import select
+from pydantic import BaseModel
+
+
+def get_password_hash(password: str) -> str:
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
+    return hashed.decode('utf-8')
+
+def verify_password(password: str, hashed_password: str) -> bool:
+    return bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8'))
 
 router = APIRouter()
 
-@router.post("/register", response_model=schemas.UserRead, status_code=201)
-async def add_user_endpoint(user: schemas.UserCreate, db: AsyncSession = Depends(get_db_session)):
-    """
-    Эндпоинт для добавления нового пользователя в базу данных.
-    Принимает данные пользователя в теле запроса.
-    """
-    # Проверка на существование пользователя с таким же email или username или id
-    db_user_by_email = await crud.get_user_by_email(db, email=user.email)
-    db_user_by_username = await crud.get_user_by_username(db, username=user.username)
-    db_user_by_id = await crud.get_user(db, user_id=user.user_id)
-    if db_user_by_email or db_user_by_username or db_user_by_id:
+class LoginRequest(BaseModel):
+    username: str
+    password: str
 
-        return JSONResponse(status_code=409, detail="User already exists")
-    # комментирую это потому что не уверен, что эта функция добавляет пользователя в бд. 
-    # если добавляет, то все гуд. если не добавляет, то тут надо сделать так, 
-    # чтобы пользователь добавлялся в бд
-    await crud.create_user(db=db, user=user)
-    return JSONResponse(status_code=201, detail="Registered successfully")
+@router.post("/register", status_code=status.HTTP_200_OK)
+async def register(user_data: query_schemas.UserCreate, db: AsyncSession = Depends(get_db_session)):
+    user_dict = user_data.model_dump()
+    user_dict["hashed_password"] = get_password_hash(user_dict["password"])
+    del user_dict["password"]  
+    user_obj = User(**user_dict)
+    created_user = await query_crud.create_user(db=db, user=user_obj)
+    return {"message": "User created successfully"}
 
-@router.post("/signin", response_model=schemas.UserRead, status_code=201)
-async def add_user_endpoint(user: schemas.UserCreate, db: AsyncSession = Depends(get_db_session)):
-    """
-    Эндпоинт для добавления нового пользователя в базу данных.
-    Принимает данные пользователя в теле запроса.
-    """
-    # Проверка на существование пользователя с таким же email или username
-    db_user_by_email = await crud.get_user_by_email(db, email=user.email)
-    if db_user_by_email:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    db_user_by_username = await crud.get_user_by_username(db, username=user.username)
-    if db_user_by_username:
-        raise HTTPException(status_code=400, detail="Username already exists")
-    # Проверка на существование user_id (если он должен быть уникальным и не автогенерируемым БД)
-    db_user_by_id = await crud.get_user(db, user_id=user.user_id)
-    if db_user_by_id:
-         raise HTTPException(status_code=400, detail=f"User ID {user.user_id} already exists")
+@router.post("/signin", status_code=200)
+async def signin(user_data: LoginRequest, db: AsyncSession = Depends(get_db_session)):
+    try:
+        db_user = await db.execute(select(User).where(User.username == user_data.username))
+        db_user = db_user.scalar_one_or_none()
+        
+        if not db_user or not verify_password(user_data.password, db_user.hashed_password):
+            return JSONResponse(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                content={"message": "Некорректное имя пользователя или пароль"}
+            )
+            
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"message": "Вход выполнен успешно"}
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"message": f"Внутренняя ошибка сервера: {str(e)}"}
+        )
 
-    created_user = await crud.create_user(db=db, user=user)
-    return created_user
+@router.post("/add_user")
+async def add_user(user: query_schemas.UserCreate, db: AsyncSession = Depends(get_db_session)):
+    user_dict = user.model_dump()
+    user_dict["hashed_password"] = get_password_hash(user_dict["password"])
+    del user_dict["password"]
+    user_obj = User(**user_dict)
+    created_user = await query_crud.create_user(db=db, user=user_obj)
+
+    return JSONResponse(
+        content={"message": "User created successfully"},
+        status_code=201
+    )
 
 
-@router.post("/add_user", response_model=schemas.UserRead, status_code=201)
-async def add_user_endpoint(user: schemas.UserCreate, db: AsyncSession = Depends(get_db_session)):
-    """
-    Эндпоинт для добавления нового пользователя в базу данных.
-    Принимает данные пользователя в теле запроса.
-    """
-    # Проверка на существование пользователя с таким же email или username
-    db_user_by_email = await crud.get_user_by_email(db, email=user.email)
-    if db_user_by_email:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    db_user_by_username = await crud.get_user_by_username(db, username=user.username)
-    if db_user_by_username:
-        raise HTTPException(status_code=400, detail="Username already exists")
-    # Проверка на существование user_id (если он должен быть уникальным и не автогенерируемым БД)
-    db_user_by_id = await crud.get_user(db, user_id=user.user_id)
-    if db_user_by_id:
-         raise HTTPException(status_code=400, detail=f"User ID {user.user_id} already exists")
+@router.delete("/delete_user/{user_id}")
+async def delete_user(user_id: int, db: AsyncSession = Depends(get_db_session)):
+    try:
+        deleted_user = await query_crud.delete_user(db=db, user_id=user_id)
 
-    created_user = await crud.create_user(db=db, user=user)
-    return created_user
+        if deleted_user == "Пользователь не найден":
+            return JSONResponse(
+                content={"message": "User not found"},
+                status_code=404
+            )
+        if deleted_user == f"Пользователь с id {user_id} успешно удален":
+            return JSONResponse(
+                content={"message": "User deleted successfully"},
+                status_code=200
+        )
+    except Exception as e:
+        return JSONResponse(
+            content={"message": f"Error deleting user: {str(e)}"},
+            status_code=400
+        )
 
-@router.delete("/delete_user/{user_id}", response_model=schemas.UserRead)
-async def delete_user_endpoint(user_id: int, db: AsyncSession = Depends(get_db_session)):
-    """
-    Эндпоинт для удаления пользователя по user_id.
-    """
-    deleted_user = await crud.delete_user(db=db, user_id=user_id)
-    if deleted_user is None:
-        raise HTTPException(status_code=404, detail="User not found")
-    return deleted_user # вернуть данные удаленного пользователя
+@router.get("/get_user/{user_id}")
+async def get_user(user_id: int, db: AsyncSession = Depends(get_db_session)):
+    try:
+        db_user = await query_crud.get_user(db=db, user_id=user_id)
+        if db_user is None:
+            return JSONResponse(
+                content={"message": "User not found"},
+                status_code=404
+            )
+        return JSONResponse(
+            content={"message": "User found", "data": db_user},
+            status_code=200
+        )
+    except Exception as e:
+        return JSONResponse(
+            content={"message": f"Error getting user: {str(e)}"},
+            status_code=400
+        )
 
-@router.get("/get_user/{user_id}", response_model=schemas.UserRead)
-async def get_user_endpoint(user_id: int, db: AsyncSession = Depends(get_db_session)):
-    """
-    Эндпоинт для получения информации о пользователе по user_id.
-    """
-    db_user = await crud.get_user(db=db, user_id=user_id)
-    if db_user is None:
-        raise HTTPException(status_code=404, detail="User not found")
-    return db_user
-
-@router.get("/get_all_users", response_model=List[schemas.UserRead])
-async def get_all_users_endpoint(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db_session)):
-    """
-    Эндпоинт для получения списка всех пользователей с пагинацией.
-    """
-    users = await crud.get_users(db=db, skip=skip, limit=limit)
-    return users
+@router.get("/get_all_users")
+async def get_all_users(db: AsyncSession = Depends(get_db_session)):
+    try:
+        users = await query_crud.get_users(db=db)
+        return JSONResponse(
+            content={"message": "Users retrieved successfully", "data": users},
+            status_code=200
+        )
+    except Exception as e:
+        return JSONResponse(
+            content={"message": f"Error getting users: {str(e)}"},
+            status_code=400
+        )

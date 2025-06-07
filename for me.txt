@@ -15,7 +15,3 @@ uvicorn main:app1 --host localhost --port 8000 --reload
 
 в терминале 2:
 uvicorn main:app2 --host localhost --port 8001 --reload
-
-
-для подключения к контейнеру редис с другого компа:
-docker run --hostname=65c7b780f946 --mac-address=02:42:ac:11:00:02 --env=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin --env=GOSU_VERSION=1.17 --env=REDIS_VERSION=7.4.2 --env=REDIS_DOWNLOAD_URL=http://download.redis.io/releases/redis-7.4.2.tar.gz --env=REDIS_DOWNLOAD_SHA=4ddebbf09061cbb589011786febdb34f29767dd7f89dbe712d2b68e808af6a1f --volume=/data --network=bridge --workdir=/data -p 6379:6379 --restart=no --runtime=runc -d redis

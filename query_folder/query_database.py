@@ -8,14 +8,12 @@ async_engine = create_async_engine(
     echo=True,
 )
 
-# Фабрика асинхронных сессий
 async_session_factory = async_sessionmaker(
     bind=async_engine,
     class_=AsyncSession,
-    expire_on_commit=False, # Важно для асинхронного кода
+    expire_on_commit=False,
 )
 
-# Базовый класс для декларативных моделей SQLAlchemy
 Base = declarative_base()
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:

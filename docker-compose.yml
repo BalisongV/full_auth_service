@@ -14,6 +14,7 @@ services:
       dockerfile: backend_folder/Dockerfile
     ports:
       - "8000:8000"
+    container_name: backend-service-tanya
     networks:
       - auth-network
 
@@ -23,6 +24,7 @@ services:
       dockerfile: query_folder/Dockerfile
     ports:
       - "8003:8003"
+    container_name: query-service-masha
     volumes:
       - ./query_service:/app/query_service
     environment:

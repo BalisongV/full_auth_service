@@ -47,7 +47,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                         content=service_response.json()
                     )
                     
-                    if service_response.status_code == 200:
+                    if service_response.status_code == 201:
                         response.headers["x-username"] = body.get("username", "")
                         response.headers["x-user-hashed_password"] = get_password_hash(body.get("password", ""))  
 

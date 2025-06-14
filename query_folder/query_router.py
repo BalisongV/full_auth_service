@@ -23,7 +23,7 @@ class LoginRequest(BaseModel):
     username: str
     password: str
 
-@router.post("/register", status_code=status.HTTP_200_OK)
+@router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(user_data: query_schemas.UserCreate, db: AsyncSession = Depends(get_db_session)):
     user_dict = user_data.model_dump()
     user_dict["hashed_password"] = get_password_hash(user_dict["password"])
